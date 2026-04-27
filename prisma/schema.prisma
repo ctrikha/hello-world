@@ -1,0 +1,443 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum OrgPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum Role {
+  STUDENT
+  ADVISOR
+  ADMIN
+  PARENT
+}
+
+enum HighSchoolType {
+  PUBLIC
+  PRIVATE
+  CHARTER
+  HOMESCHOOL
+}
+
+enum CollegeSize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum CampusSetting {
+  URBAN
+  SUBURBAN
+  RURAL
+}
+
+enum CollegeType {
+  TWO_YEAR
+  FOUR_YEAR
+  GRADUATE
+}
+
+enum CollegeControl {
+  PUBLIC
+  PRIVATE
+}
+
+enum ApplicationStatus {
+  RESEARCHING
+  PLANNING
+  IN_PROGRESS
+  SUBMITTED
+  INTERVIEW
+  DECISION
+  ENROLLED
+}
+
+enum DecisionType {
+  EA
+  ED
+  ED2
+  RD
+  ROLLING
+}
+
+enum ApplicationOutcome {
+  ACCEPTED
+  WAITLISTED
+  DEFERRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum DocType {
+  ESSAY
+  TRANSCRIPT
+  RECOMMENDATION
+  OTHER
+}
+
+enum MeetingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum NotificationType {
+  MESSAGE_RECEIVED
+  MEETING_CONFIRMED
+  MEETING_CANCELLED
+  APPLICATION_DEADLINE
+  DOCUMENT_UPLOADED
+  ADVISOR_ASSIGNED
+}
+
+// ─── Organization (Tenant) ────────────────────────────────────────────────────
+
+model Organization {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  logoUrl      String?
+  plan         OrgPlan  @default(FREE)
+  customDomain String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users    UserOrganization[]
+  invites  Invite[]
+  settings OrgSettings?
+}
+
+model OrgSettings {
+  id                String       @id @default(cuid())
+  organizationId    String       @unique
+  brandColor        String       @default("#6366f1")
+  allowSelfRegister Boolean      @default(false)
+  requireParentLink Boolean      @default(false)
+  organization      Organization @relation(fields: [organizationId], references: [id])
+}
+
+// ─── Users & Auth ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  organizations     UserOrganization[]
+  studentProfile    StudentProfile?
+  advisorProfile    AdvisorProfile?
+  sentMessages      Message[]                @relation("sender")
+  conversations     ConversationParticipant[]
+  meetingsAsStudent Meeting[]                @relation("studentMeetings")
+  meetingsAsAdvisor Meeting[]                @relation("advisorMeetings")
+  notifications     Notification[]
+}
+
+model UserOrganization {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role
+  joinedAt       DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Invite {
+  id             String    @id @default(cuid())
+  email          String
+  organizationId String
+  role           Role
+  token          String    @unique @default(cuid())
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ─── Profiles ─────────────────────────────────────────────────────────────────
+
+model StudentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  gpa       Decimal? @db.Decimal(3, 2)
+  satScore  Int?
+  actScore  Int?
+  classRank Int?
+  classSize Int?
+  apCourses String[]
+  ibCourses String[]
+
+  graduationYear Int            @default(2025)
+  highSchool     String?
+  highSchoolType HighSchoolType @default(PUBLIC)
+  state          String?
+  intendedMajors String[]
+
+  preferredSize   CollegeSize?
+  preferredRegion String[]
+  maxTuition      Int?
+  prefersCampus   CampusSetting?
+
+  extracurriculars  Json?
+  awards            String[]
+  personalStatement String? @db.Text
+
+  advisorId String?
+  updatedAt DateTime @updatedAt
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications Application[]
+  parentLinks  ParentStudentLink[]
+}
+
+model AdvisorProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  bio              String?  @db.Text
+  specializations  String[]
+  yearsExperience  Int      @default(0)
+  acceptingClients Boolean  @default(true)
+  calendarUrl      String?
+  timezone         String   @default("America/New_York")
+  availability     Json?
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ParentStudentLink {
+  id               String    @id @default(cuid())
+  parentUserId     String
+  studentProfileId String
+  approvedAt       DateTime?
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+}
+
+// ─── Colleges ─────────────────────────────────────────────────────────────────
+
+model College {
+  id      String  @id @default(cuid())
+  ipedsId String? @unique
+  name    String
+  slug    String  @unique
+  city    String
+  state   String
+  website String?
+  logoUrl String?
+
+  acceptanceRate    Decimal?  @db.Decimal(5, 4)
+  satMid50Low       Int?
+  satMid50High      Int?
+  actMid50Low       Int?
+  actMid50High      Int?
+  earlyActionDate   DateTime?
+  earlyDecisionDate DateTime?
+  regularDeadline   DateTime?
+
+  size    CollegeSize?
+  setting CampusSetting?
+  type    CollegeType    @default(FOUR_YEAR)
+  control CollegeControl @default(PRIVATE)
+
+  tuitionInState  Int?
+  tuitionOutState Int?
+  roomAndBoard    Int?
+  avgNetPrice     Int?
+
+  avgMeritAid         Int?
+  percentReceivingAid Int?
+
+  popularMajors  String[]
+  graduationRate Decimal? @db.Decimal(3, 2)
+
+  applications Application[]
+
+  @@index([state])
+  @@index([size])
+  @@index([setting])
+}
+
+// ─── Applications (Kanban) ────────────────────────────────────────────────────
+
+model Application {
+  id               String @id @default(cuid())
+  studentProfileId String
+  collegeId        String
+
+  status       ApplicationStatus  @default(RESEARCHING)
+  decisionType DecisionType?
+  boardColumn  ApplicationStatus  @default(RESEARCHING)
+  columnOrder  Float              @default(0)
+
+  deadline       DateTime?
+  submittedAt    DateTime?
+  decisionDate   DateTime?
+  outcome        ApplicationOutcome?
+  scholarshipAmt Int?
+
+  fitScore   Int?
+  fitDetails Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studentProfile StudentProfile       @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  college        College              @relation(fields: [collegeId], references: [id])
+  notes          ApplicationNote[]
+  documents      ApplicationDocument[]
+
+  @@unique([studentProfileId, collegeId])
+}
+
+model ApplicationNote {
+  id            String   @id @default(cuid())
+  applicationId String
+  authorId      String
+  content       String   @db.Text
+  createdAt     DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model ApplicationDocument {
+  id            String   @id @default(cuid())
+  applicationId String
+  name          String
+  url           String
+  type          DocType
+  uploadedAt    DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+// ─── Messaging ────────────────────────────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+  subject   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model ConversationParticipant {
+  id             String    @id @default(cuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String    @db.Text
+  attachmentUrl  String?
+  createdAt      DateTime  @default(now())
+  editedAt       DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("sender", fields: [senderId], references: [id])
+}
+
+// ─── Scheduling ───────────────────────────────────────────────────────────────
+
+model Meeting {
+  id           String        @id @default(cuid())
+  studentId    String
+  advisorId    String
+  title        String
+  description  String?       @db.Text
+  startTime    DateTime
+  endTime      DateTime
+  status       MeetingStatus @default(PENDING)
+  meetingUrl   String?
+  cancelReason String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  student User @relation("studentMeetings", fields: [studentId], references: [id])
+  advisor User @relation("advisorMeetings", fields: [advisorId], references: [id])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

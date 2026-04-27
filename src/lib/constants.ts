@@ -1,0 +1,14 @@
+export const STATE_TO_REGION: Record<string, string> = {
+  ME: "Northeast", NH: "Northeast", VT: "Northeast", MA: "Northeast",
+  RI: "Northeast", CT: "Northeast", NY: "Northeast", NJ: "Northeast",
+  PA: "Northeast", DE: "Northeast", MD: "Northeast",
+  OH: "Midwest", MI: "Midwest", IN: "Midwest", IL: "Midwest",
+  WI: "Midwest", MN: "Midwest", IA: "Midwest", MO: "Midwest",
+  ND: "Midwest", SD: "Midwest", NE: "Midwest", KS: "Midwest",
+  VA: "South", WV: "South", NC: "South", SC: "South", GA: "South",
+  FL: "South", KY: "South", TN: "South", AL: "South", MS: "South",
+  AR: "South", LA: "South", TX: "South", OK: "South",
+  MT: "West", ID: "West", WY: "West", CO: "West", NM: "West",
+  AZ: "West", UT: "West", NV: "West", WA: "West", OR: "West",
+  CA: "West", AK: "West", HI: "West",
+};
